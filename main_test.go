@@ -1,7 +1,34 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
 
-func TestSerial(t *testing.T) {
-	_ = &serial{}
+	"github.com/KentaKudo/go-du/mock"
+)
+
+func TestExitCode(t *testing.T) {
+	sut := &CLI{outStream: new(bytes.Buffer), errStream: new(bytes.Buffer)}
+	input := strings.Split("test", " ")
+	want := ExitCodeOK
+	if got := sut.Run(input); got != want {
+		t.Errorf("want %d, got %d", want, got)
+	}
+}
+
+func TestRun_DiskUsageInvokation(t *testing.T) {
+	mock := &mock.DiskUsage{
+		CountFn: func(dirs ...string) (int, int) { return 0, 0 },
+	}
+	sut := &CLI{
+		outStream: new(bytes.Buffer),
+		errStream: new(bytes.Buffer),
+		du:        mock,
+	}
+	input := strings.Split("test1 test2", " ")
+	sut.Run(input)
+	if !mock.CountInvoked {
+		t.Errorf("CLI.du.Count is not called")
+	}
 }
