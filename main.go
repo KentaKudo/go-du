@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/KentaKudo/go-du/serial"
 )
 
 // TODO
-// - implement flags
-// - write mockable test
-// - start writing serialised version
 // - try concurrency
 
 const (
@@ -31,14 +30,19 @@ func New() *CLI {
 	return &CLI{
 		outStream: os.Stdout,
 		errStream: os.Stderr,
-		du:        &serial{},
+		du:        serial.New(),
 	}
 }
 
 // Run executes the command.
 func (c *CLI) Run(args []string) int {
-	numFiles, bytes := c.du.Count("dir1", "dir2", "dir3")
-	fmt.Fprintf(c.outStream, "%d files, %d bytes", numFiles, bytes)
+	num, bytes, err := c.du.Count(args)
+	if err != nil {
+		fmt.Fprintln(c.errStream, err)
+		return ExitCodeError
+	}
+
+	fmt.Fprintf(c.outStream, "%d files, %d bytes\n", num, bytes)
 	return ExitCodeOK
 }
 
@@ -49,11 +53,5 @@ func main() {
 
 // DiskUsage represents an interface that can count the number of files and total bytes under the directories.
 type DiskUsage interface {
-	Count(...string) (int, int)
-}
-
-type serial struct{}
-
-func (s *serial) Count(dirs ...string) (int, int) {
-	return 0, 0
+	Count([]string) (int, int, error)
 }

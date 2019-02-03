@@ -9,7 +9,11 @@ import (
 )
 
 func TestExitCode(t *testing.T) {
-	sut := &CLI{outStream: new(bytes.Buffer), errStream: new(bytes.Buffer)}
+	sut := &CLI{
+		outStream: new(bytes.Buffer),
+		errStream: new(bytes.Buffer),
+		du:        mock.DefaultDiskUsage,
+	}
 	input := strings.Split("test", " ")
 	want := ExitCodeOK
 	if got := sut.Run(input); got != want {
@@ -18,9 +22,7 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestRun_DiskUsageInvokation(t *testing.T) {
-	mock := &mock.DiskUsage{
-		CountFn: func(dirs ...string) (int, int) { return 0, 0 },
-	}
+	mock := mock.DefaultDiskUsage
 	sut := &CLI{
 		outStream: new(bytes.Buffer),
 		errStream: new(bytes.Buffer),
