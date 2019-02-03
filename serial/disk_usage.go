@@ -1,9 +1,9 @@
 package serial
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 // DiskUsage represents an instance that satisfies DiskUsage interface.
@@ -20,25 +20,36 @@ func New() *DiskUsage {
 func (d *DiskUsage) Count(dirs []string) (int, int, error) {
 	var num, bytes int
 	for _, dir := range dirs {
-		files, err := d.dirReader(dir)
+		n, b, err := d.walkDir(dir)
 		if err != nil {
 			return 0, 0, err
 		}
-		subdirs := []string{}
-		for _, f := range files {
-			if f.IsDir() {
-				subdirs = append(subdirs, fmt.Sprintf("%s/%s", dir, f.Name()))
-				continue
+		num += n
+		bytes += b
+	}
+
+	return num, bytes, nil
+}
+
+func (d *DiskUsage) walkDir(dir string) (int, int, error) {
+	var num, bytes int
+	entries, err := d.dirReader(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			n, b, err := d.walkDir(filepath.Join(dir, e.Name()))
+			if err != nil {
+				return 0, 0, nil
 			}
-			num++
-			bytes += int(f.Size())
+			num += n
+			bytes += b
+			continue
 		}
-		subnum, subbytes, err := d.Count(subdirs)
-		if err != nil {
-			return 0, 0, err
-		}
-		num += subnum
-		bytes += subbytes
+
+		num++
+		bytes += int(e.Size())
 	}
 
 	return num, bytes, nil
