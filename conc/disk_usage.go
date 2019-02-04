@@ -24,20 +24,15 @@ type result struct {
 
 // Count counts the number of files and the total bytes under the given directories.
 func (du *DiskUsage) Count(dirs []string) (int, int, error) {
-	resCh := make(chan result)
-	var n sync.WaitGroup
-	for _, dir := range dirs {
-		n.Add(1)
-		go du.walkDir(dir, &n, resCh)
+	resChannels := make([]<-chan result, len(dirs))
+	for i, dir := range dirs {
+		resChannels[i] = du.walkDir(dir)
 	}
-	go func() {
-		n.Wait()
-		close(resCh)
-	}()
 
 	num, bytes := 0, 0
-	for res := range resCh {
+	for res := range fanIn(resChannels...) {
 		if res.err != nil {
+			// broadcast
 			return 0, 0, res.err
 		}
 		num++
@@ -47,24 +42,52 @@ func (du *DiskUsage) Count(dirs []string) (int, int, error) {
 	return num, bytes, nil
 }
 
-func (du *DiskUsage) walkDir(dir string, n *sync.WaitGroup, resCh chan<- result) {
-	defer n.Done()
-	entries, err := du.dirents(dir)
-	if err != nil {
-		resCh <- result{size: 0, err: err}
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			n.Add(1)
-			subdir := filepath.Join(dir, entry.Name())
-			go du.walkDir(subdir, n, resCh)
-		} else {
-			resCh <- result{size: int(entry.Size()), err: nil}
+func (du *DiskUsage) walkDir(dir string) <-chan result {
+	resCh := make(chan result)
+
+	go func() {
+		defer close(resCh)
+		// entries, err := du.dirReader(dir)
+		entries, err := ioutil.ReadDir(dir)
+		if err != nil {
+			resCh <- result{size: 0, err: err}
+			return
 		}
-	}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				subdir := filepath.Join(dir, entry.Name())
+				for res := range du.walkDir(subdir) {
+					resCh <- res
+				}
+			} else {
+				resCh <- result{size: int(entry.Size()), err: nil}
+			}
+		}
+	}()
+
+	return resCh
 }
 
-func (du *DiskUsage) dirents(dir string) ([]os.FileInfo, error) {
-	return du.dirReader(dir)
+func fanIn(channels ...<-chan result) <-chan result {
+	var wg sync.WaitGroup
+	multiplexedStream := make(chan result)
+
+	multiplex := func(c <-chan result) {
+		defer wg.Done()
+		for i := range c {
+			multiplexedStream <- i
+		}
+	}
+
+	wg.Add(len(channels))
+	for _, c := range channels {
+		go multiplex(c)
+	}
+
+	go func() {
+		wg.Wait()
+		close(multiplexedStream)
+	}()
+
+	return multiplexedStream
 }
