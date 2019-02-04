@@ -138,6 +138,7 @@ func benchmarkCount(b *testing.B, numFiles int) {
 		}
 	}
 
+	b.ResetTimer()
 	sut.Count([]string{dir})
 }
 
@@ -166,6 +167,7 @@ func benchmarkCountDir(b *testing.B, numFiles int) {
 		dirs = append(dirs, dir)
 	}
 
+	b.ResetTimer()
 	sut.Count(dirs)
 }
 

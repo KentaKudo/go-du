@@ -2,6 +2,7 @@ package conc
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -24,15 +25,17 @@ type result struct {
 
 // Count counts the number of files and the total bytes under the given directories.
 func (du *DiskUsage) Count(dirs []string) (int, int, error) {
+	done := make(chan interface{})
+	defer close(done)
+
 	resChannels := make([]<-chan result, len(dirs))
 	for i, dir := range dirs {
-		resChannels[i] = du.walkDir(dir)
+		resChannels[i] = du.walkDir(done, dir)
 	}
 
 	num, bytes := 0, 0
-	for res := range fanIn(resChannels...) {
+	for res := range fanIn(done, resChannels...) {
 		if res.err != nil {
-			// broadcast
 			return 0, 0, res.err
 		}
 		num++
@@ -42,7 +45,8 @@ func (du *DiskUsage) Count(dirs []string) (int, int, error) {
 	return num, bytes, nil
 }
 
-func (du *DiskUsage) walkDir(dir string) <-chan result {
+func (du *DiskUsage) walkDir(done <-chan interface{}, dir string) <-chan result {
+	log.Println("pass")
 	resCh := make(chan result)
 
 	go func() {
@@ -50,17 +54,37 @@ func (du *DiskUsage) walkDir(dir string) <-chan result {
 		// entries, err := du.dirReader(dir)
 		entries, err := ioutil.ReadDir(dir)
 		if err != nil {
-			resCh <- result{size: 0, err: err}
+			select {
+			case <-done:
+			case resCh <- result{size: 0, err: err}:
+			}
 			return
 		}
+	outerLoop:
 		for _, entry := range entries {
 			if entry.IsDir() {
 				subdir := filepath.Join(dir, entry.Name())
-				for res := range du.walkDir(subdir) {
-					resCh <- res
+				for {
+					select {
+					case <-done:
+						return
+					case res, ok := <-du.walkDir(done, subdir):
+						if !ok {
+							continue outerLoop
+						}
+						select {
+						case <-done:
+							return
+						case resCh <- res:
+						}
+					}
 				}
 			} else {
-				resCh <- result{size: int(entry.Size()), err: nil}
+				select {
+				case <-done:
+					return
+				case resCh <- result{size: int(entry.Size()), err: nil}:
+				}
 			}
 		}
 	}()
@@ -68,14 +92,21 @@ func (du *DiskUsage) walkDir(dir string) <-chan result {
 	return resCh
 }
 
-func fanIn(channels ...<-chan result) <-chan result {
+func fanIn(
+	done <-chan interface{},
+	channels ...<-chan result,
+) <-chan result {
 	var wg sync.WaitGroup
 	multiplexedStream := make(chan result)
 
 	multiplex := func(c <-chan result) {
 		defer wg.Done()
 		for i := range c {
-			multiplexedStream <- i
+			select {
+			case <-done:
+				return
+			case multiplexedStream <- i:
+			}
 		}
 	}
 
