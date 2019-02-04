@@ -5,11 +5,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/KentaKudo/go-du/serial"
+	"github.com/KentaKudo/go-du/background"
 )
 
 // TODO
 // - try concurrency
+// - benchmarking
 
 const (
 	// ExitCodeOK is returned when the command runs successfully.
@@ -30,7 +31,7 @@ func New() *CLI {
 	return &CLI{
 		outStream: os.Stdout,
 		errStream: os.Stderr,
-		du:        serial.New(),
+		du:        background.New(),
 	}
 }
 

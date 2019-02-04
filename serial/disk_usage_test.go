@@ -2,6 +2,7 @@ package serial
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -118,3 +119,56 @@ func TestDiskUsage_CountOneDirWithOneFile(t *testing.T) {
 		t.Errorf("want %d, got %d", sizeWant, size)
 	}
 }
+
+func benchmarkCount(b *testing.B, numFiles int) {
+	sut := New()
+
+	dir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	for i := 0; i < numFiles; i++ {
+		f, err := ioutil.TempFile(dir, fmt.Sprintf("test-%d", i))
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err = f.Write([]byte("0")); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	sut.Count([]string{dir})
+}
+
+func BenchmarkCount10(b *testing.B)   { benchmarkCount(b, 10) }
+func BenchmarkCount100(b *testing.B)  { benchmarkCount(b, 100) }
+func BenchmarkCount1000(b *testing.B) { benchmarkCount(b, 1000) }
+
+func benchmarkCountDir(b *testing.B, numFiles int) {
+	sut := New()
+
+	dirs := []string{}
+	for i := 0; i < numFiles; i++ {
+		dir, err := ioutil.TempDir("", fmt.Sprintf("test-%d", i))
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer os.RemoveAll(dir)
+		f, err := ioutil.TempFile(dir, "test")
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err = f.Write([]byte("0")); err != nil {
+			b.Fatal(err)
+		}
+
+		dirs = append(dirs, dir)
+	}
+
+	sut.Count(dirs)
+}
+
+func BenchmarkCountDir10(b *testing.B)   { benchmarkCountDir(b, 10) }
+func BenchmarkCountDir100(b *testing.B)  { benchmarkCountDir(b, 100) }
+func BenchmarkCountDir1000(b *testing.B) { benchmarkCountDir(b, 1000) }
