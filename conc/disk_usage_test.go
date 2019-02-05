@@ -1,6 +1,7 @@
 package conc
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,21 +23,16 @@ func TestDiskUsage_CountEmpty(t *testing.T) {
 	}
 }
 
-// func TestDiskUsage_CountDirReadError(t *testing.T) {
-// 	want := "test error"
-// 	cnt := 0
-// 	mock := func(got string) ([]os.FileInfo, error) {
-// 		if cnt == 0 {
-// 			cnt++
-// 			return []os.FileInfo{}, nil
-// 		}
-// 		return nil, errors.New(want)
-// 	}
-// 	sut := &DiskUsage{dirReader: mock}
-// 	if _, _, err := sut.Count([]string{"dir1", "dir2"}); err.Error() != want {
-// 		t.Errorf("want %q, got %q", want, err.Error())
-// 	}
-// }
+func TestDiskUsage_CountDirReadError(t *testing.T) {
+	want := "test error"
+	mock := func(got string) ([]os.FileInfo, error) {
+		return nil, errors.New(want)
+	}
+	sut := &DiskUsage{dirReader: mock}
+	if _, _, err := sut.Count([]string{"dir1", "dir2"}); err.Error() != want {
+		t.Errorf("want %q, got %q", want, err.Error())
+	}
+}
 
 func TestDiskUsage_CountEmptyDir(t *testing.T) {
 	sut := New()

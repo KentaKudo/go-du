@@ -2,7 +2,6 @@ package conc
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,13 +45,11 @@ func (du *DiskUsage) Count(dirs []string) (int, int, error) {
 }
 
 func (du *DiskUsage) walkDir(done <-chan interface{}, dir string) <-chan result {
-	log.Println("pass")
 	resCh := make(chan result)
 
 	go func() {
 		defer close(resCh)
-		// entries, err := du.dirReader(dir)
-		entries, err := ioutil.ReadDir(dir)
+		entries, err := du.dirReader(dir)
 		if err != nil {
 			select {
 			case <-done:
@@ -63,12 +60,12 @@ func (du *DiskUsage) walkDir(done <-chan interface{}, dir string) <-chan result 
 	outerLoop:
 		for _, entry := range entries {
 			if entry.IsDir() {
-				subdir := filepath.Join(dir, entry.Name())
+				subCh := du.walkDir(done, filepath.Join(dir, entry.Name()))
 				for {
 					select {
 					case <-done:
 						return
-					case res, ok := <-du.walkDir(done, subdir):
+					case res, ok := <-subCh:
 						if !ok {
 							continue outerLoop
 						}
@@ -82,7 +79,6 @@ func (du *DiskUsage) walkDir(done <-chan interface{}, dir string) <-chan result 
 			} else {
 				select {
 				case <-done:
-					return
 				case resCh <- result{size: int(entry.Size()), err: nil}:
 				}
 			}
