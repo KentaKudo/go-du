@@ -1,16 +1,15 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/KentaKudo/go-du/background"
+	"github.com/KentaKudo/go-du/concurrent"
+	"github.com/KentaKudo/go-du/serial"
 )
-
-// TODO
-// - try concurrency
-// - benchmarking
 
 const (
 	// ExitCodeOK is returned when the command runs successfully.
@@ -27,11 +26,23 @@ type CLI struct {
 }
 
 // New returns a new CLI instance.
-func New() *CLI {
+func New(strategy string) *CLI {
+	var du DiskUsage
+	switch strategy {
+	case "serial":
+		du = serial.New()
+	case "background":
+		du = background.New()
+	case "concurrent":
+		du = concurrent.New()
+	default:
+		panic("unknown strategy")
+	}
+
 	return &CLI{
 		outStream: os.Stdout,
 		errStream: os.Stderr,
-		du:        background.New(),
+		du:        du,
 	}
 }
 
@@ -48,8 +59,12 @@ func (c *CLI) Run(args []string) int {
 }
 
 func main() {
-	cli := New()
-	os.Exit(cli.Run(os.Args[1:]))
+	var strategy string
+	flag.StringVar(&strategy, "strategy", "serial", "The way to access directories")
+	flag.Parse()
+
+	cli := New(strategy)
+	os.Exit(cli.Run(flag.Args()))
 }
 
 // DiskUsage represents an interface that can count the number of files and total bytes under the directories.
